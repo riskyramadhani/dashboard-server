@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dashboard Server — PT. Bina Sarana Sukses
 
-## Getting Started
+Sistem monitoring infrastruktur server, jaringan, dan aplikasi berbasis web terpusat untuk Divisi IT & NOC PT. Bina Sarana Sukses. Terintegrasi penuh dengan PRTG Network Monitor API, modul Uptime SLA Availability, Network Diagnostic Tools, serta Audit Logging.
 
-First, run the development server:
+---
 
+## 🚀 Fitur Utama
+
+- **Integrasi PRTG Network Monitor (v2)**:
+  - Sinkronisasi metrik real-time & otomatis via background polling / cron runner.
+  - Perhitungan **SLA Uptime Ketersediaan** dan **Health Score** akurat (sensor status `Down` memotong uptime, `Paused` diperhitungkan netral sebagai maintenance window).
+  - Acknowledge alarm langsung dari dashboard dengan pencatatan audit log operator.
+- **Uptime & SLA Monitor**:
+  - Pengecekan multi-protokol (HTTP, HTTPS, ICMP PING, TCP Port).
+  - Ambang batas latensi dinamis (*warning latency threshold*) & auto-recovery tracking.
+- **Network Diagnostic Tools**:
+  - Ping & Traceroute (aman dari shell injection via `execFile`).
+  - TCP Port Checker & DNS Lookup.
+  - OUI MAC Address Resolution & ARP Cache lookup dengan riwayat audit.
+- **Laporan Eksekutif & Ekspor Data**:
+  - Filter rentang tanggal fleksibel (24 jam, 7 hari, 30 hari, kustom).
+  - Format ekspor: CSV, Excel (.xlsx), dan Laporan Resmi PDF/Printable dengan kop surat PT. Bina Sarana Sukses.
+- **Manajemen Akses Berbasis Peran (RBAC)**:
+  - Role: `ADMIN`, `NOC_OPERATOR`, `STAFF`.
+  - Pembatasan izin probe (*allowed probes*) dan modul (*allowed modules*).
+- **Keamanan & Kriptografi**:
+  - Enkripsi token PRTG dengan **AES-256-GCM** (random 16-byte IV & Auth Tag).
+  - Proteksi HTTP Security Headers (HSTS, CSP, X-Frame-Options, X-Content-Type-Options).
+  - Audit trail komprehensif pada setiap tindakan administratif dan eksekusi tools.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 16.3.5 (Turbopack), React 19, TailwindCSS, Lucide Icons, Recharts.
+- **Backend**: Next.js App Router (Route Handlers, Proxy Middleware), Auth.js (NextAuth v5 beta).
+- **Basis Data**: PostgreSQL 16 (TimescaleDB) dengan Prisma ORM 7.
+- **Testing**: Vitest, React Testing Library, JSDOM (Unit, Feature, & Simulation Tests).
+
+---
+
+## 📋 Prasyarat
+
+- Node.js >= 20.x atau 24.x
+- Docker & Docker Compose (untuk database PostgreSQL/TimescaleDB)
+- Akun PRTG Network Monitor dengan hak akses API (opsional untuk sinkronisasi live)
+
+---
+
+## ⚡ Panduan Instalasi & Menjalankan Lokal
+
+### 1. Kloning Repositori & Install Dependensi
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/riskyramadhani/dashboard-server.git
+cd dashboard-server
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Konfigurasi Lingkungan (.env)
+Salin berkas `.env.example` ke `.env`:
+```bash
+cp .env.example .env
+```
+Sesuaikan variabel di `.env`:
+```env
+DATABASE_URL="postgresql://bss:bss_secret_2026@localhost:5432/dashboard_server"
+AUTH_SECRET="your-generated-auth-secret-here"
+AUTH_TRUST_HOST=true
+ENCRYPTION_KEY="your-64-hex-character-key-here"
+INTERNAL_CRON_SECRET="your-cron-secret-here"
+```
+> *Catatan: Untuk menghasilkan `ENCRYPTION_KEY` 32-byte (64 karakter hex):*  
+> `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Jalankan Database Docker
+```bash
+docker compose up -d
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Migrasi & Seeding Database
+```bash
+npx prisma db push
+npx tsx prisma/seed.ts
+```
 
-## Learn More
+### 5. Jalankan Server Pengembangan
+```bash
+npm run dev
+```
+Akses dashboard melalui peramban di: `http://localhost:3000`
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🧪 Menjalankan Automated Test Suite
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Proyek ini dilengkapi dengan 22 pengujian otomatis (Unit Test, Feature Test, Simulation Test):
+```bash
+# Jalankan test suite sekali jalan
+npm test
 
-## Deploy on Vercel
+# Jalankan test suite dalam watch mode
+npm run test:watch
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📄 Lisensi
+
+Hak Cipta © 2026 PT. Bina Sarana Sukses. Seluruh hak cipta dilindungi undang-undang.

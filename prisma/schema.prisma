@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  NOC_OPERATOR
+  STAFF
+}
+
+enum SensorStatus {
+  OK
+  Warning
+  Down
+  Unknown
+  Paused
+}
+
+model User {
+  id            String    @id @default(cuid())
+  employeeId    String    @unique
+  name          String
+  passwordHash  String
+  role          Role      @default(STAFF)
+  allowedProbes String[]  @default(["*"])
+  allowedModules String[] @default(["*"])
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@index([employeeId])
+  @@index([role])
+}
+
+model PrtgSetting {
+  id                  Int       @id @default(1)
+  baseUrl             String    @default("")
+  apiTokenEncrypted   String    @default("")
+  apiTokenIv          String    @default("")
+  apiTokenAuthTag     String    @default("")
+  ignoreSsl           Boolean   @default(true)
+  pollIntervalSeconds Int       @default(60)
+  retentionDays       Int       @default(90)
+  uptimeWarningLatencyMs Int    @default(1000)
+  uptimeTimeoutMs       Int     @default(5000)
+  lastSyncAt          DateTime?
+  lastCleanupAt       DateTime?
+  connectionStatus    String    @default("unknown")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model Sensor {
+  id                  Int          @id
+  probeName           String
+  groupName           String
+  deviceName          String
+  sensorName          String
+  sensorType          String
+  lastStatus          SensorStatus @default(Unknown)
+  lastValue           String?
+  lastMessage         String?
+  isActive            Boolean      @default(true)
+  consecutiveWarnings Int          @default(0)
+  firstWarningAt      DateTime?
+  acknowledgedBy      String?
+  acknowledgedAt      DateTime?
+  lastUpdated         DateTime     @default(now())
+  createdAt           DateTime     @default(now())
+
+  metrics SensorMetricHistory[]
+
+  @@index([probeName])
+  @@index([deviceName])
+  @@index([lastStatus])
+  @@index([probeName, deviceName])
+  @@index([sensorType])
+}
+
+model SensorMetricHistory {
+  id          String       @id @default(cuid())
+  sensorId    Int
+  metricValue Float
+  unit        String
+  status      SensorStatus
+  recordedAt  DateTime     @default(now())
+
+  sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  @@index([sensorId, recordedAt])
+  @@index([recordedAt])
+  @@index([status, recordedAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  target    String?
+  detail    String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+model MacLookupHistory {
+  id           String    @id @default(cuid())
+  macAddress   String
+  ouiPrefix    String
+  vendor       String
+  isPrivate    Boolean   @default(false)
+  details      String?
+  remark       String?
+  queriedBy    String
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([macAddress])
+  @@index([vendor])
+  @@index([isDeleted])
+}
+
+enum UptimeCheckType {
+  HTTP
+  HTTPS
+  PING
+  TCP_PORT
+}
+
+enum UptimeStatus {
+  UP
+  WARNING
+  DOWN
+  UNKNOWN
+}
+
+model UptimeMonitor {
+  id                 String          @id @default(cuid())
+  name               String
+  checkType          UptimeCheckType
+  target             String
+  port               Int?
+  intervalSeconds    Int             @default(300)
+  timeoutMs          Int             @default(5000)
+  warningThresholdMs Int?            @default(1000)
+  expectedStatus     Int?
+  keyword            String?
+  category           String          @default("Web Server")
+  isActive           Boolean         @default(true)
+  lastStatus         UptimeStatus    @default(UNKNOWN)
+  lastCheckedAt   DateTime?
+  lastResponseMs  Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  checkResults UptimeCheckResult[]
+
+  @@index([isActive])
+  @@index([lastStatus])
+  @@index([checkType])
+  @@index([category])
+}
+
+model UptimeCheckResult {
+  id          String       @id @default(cuid())
+  monitorId   String
+  status      UptimeStatus
+  responseMs  Int?
+  statusCode  Int?
+  error       String?
+  checkedAt   DateTime     @default(now())
+
+  monitor UptimeMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, checkedAt])
+  @@index([checkedAt])
+  @@index([monitorId, status])
+}

@@ -1,26 +1,152 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 224 25% 6%;
+    --foreground: 213 31% 91%;
+    --card: 224 20% 10%;
+    --card-foreground: 213 31% 91%;
+    --popover: 224 20% 10%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 224 20% 15%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 224 20% 15%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 224 20% 15%;
+    --accent-foreground: 213 31% 91%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 224 18% 18%;
+    --input: 224 18% 18%;
+    --ring: 221 83% 53%;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Scrollbar styling for NOC theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-noc-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-noc-hover;
+  }
+}
+
+@layer components {
+  /* NOC Status indicators */
+  .status-dot {
+    @apply inline-block w-2.5 h-2.5 rounded-full;
+  }
+
+  .status-dot-ok {
+    @apply status-dot bg-status-ok shadow-[0_0_6px_rgba(34,197,94,0.5)];
+  }
+
+  .status-dot-warning {
+    @apply status-dot bg-status-warning shadow-[0_0_6px_rgba(245,158,11,0.5)] animate-pulse-slow;
+  }
+
+  .status-dot-down {
+    @apply status-dot bg-status-down shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse;
+  }
+
+  .status-dot-paused {
+    @apply status-dot bg-status-paused;
+  }
+
+  .status-dot-unknown {
+    @apply status-dot bg-status-unknown;
+  }
+
+  /* Glass card effect */
+  .glass-card {
+    @apply bg-noc-card/80 backdrop-blur-xl border border-noc-border rounded-xl;
+  }
+
+  /* Terminal output styling */
+  .terminal-output {
+    @apply bg-[#0d1117] border border-noc-border rounded-lg p-4 font-mono text-sm text-green-400 overflow-auto max-h-96;
+  }
+
+  /* KPI card hover effect */
+  .kpi-card {
+    @apply glass-card p-6 transition-all duration-300 hover:border-brand-primary/30 hover:shadow-lg hover:shadow-brand-primary/5;
+  }
+
+  /* Probe card */
+  .probe-card {
+    @apply glass-card p-5 transition-all duration-300 hover:bg-noc-hover/50 cursor-pointer;
+  }
+
+  /* Nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-noc-text-secondary transition-all duration-200 hover:bg-noc-hover hover:text-noc-text-primary;
+  }
+
+  .nav-item-active {
+    @apply nav-item bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary;
+  }
+}
+
+@layer utilities {
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-primary to-brand-accent;
+  }
+
+  /* Subtle grid background for NOC screens */
+  .noc-grid-bg {
+    background-image: 
+      linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
 }
