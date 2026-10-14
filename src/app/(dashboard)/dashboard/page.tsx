@@ -2206,20 +2206,9 @@ export default function DashboardPage() {
       {/* Top Header: Title, Realtime Heartbeat, & Wallboard Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-noc-text-primary tracking-tight">
-              {role === "STAFF" ? "Infrastructure Executive Overview" : "NOC Command Center"}
-            </h1>
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
-              <span className="w-2 h-2 rounded-full bg-brand-primary animate-pulse" />
-              Live PRTG 60s
-            </span>
-          </div>
-          <p className="text-xs text-noc-text-muted mt-1">
-            {role === "STAFF"
-              ? "Ringkasan performa dan ketersediaan infrastruktur IT PT. Bina Sarana Sukses"
-              : `Monitoring realtime ${data.summary.total} sensor server, storage, dan jaringan IT BSS`}
-          </p>
+          <h1 className="text-2xl font-bold text-noc-text-primary tracking-tight">
+            {role === "STAFF" ? "Infrastructure Executive Overview" : "NOC Command Center"}
+          </h1>
         </div>
       </div>
 
