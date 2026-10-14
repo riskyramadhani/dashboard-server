@@ -39,6 +39,8 @@ import {
   ExternalLink,
   SlidersHorizontal,
   Server,
+  Copy,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -447,21 +449,64 @@ interface AddMonitorModalProps {
   onCreated: () => void;
 }
 
+interface BatchRow {
+  id: string;
+  name: string;
+  category: MonitorCategory;
+  checkType: CheckType;
+  target: string;
+  port: string;
+}
+
 function AddMonitorModal({ onClose, onCreated }: AddMonitorModalProps) {
+  const [mode, setMode] = useState<"batch" | "single">("batch");
+
+  // Single mode states
   const [name, setName] = useState("");
   const [category, setCategory] = useState<MonitorCategory>("Web Server");
   const [checkType, setCheckType] = useState<CheckType>("HTTPS");
   const [target, setTarget] = useState("");
   const [port, setPort] = useState("443");
-  const [interval, setInterval_] = useState("300");
-  const [timeout, setTimeout_] = useState("5000");
-  const [warningThreshold, setWarningThreshold] = useState("1000");
   const [expectedStatus, setExpectedStatus] = useState("200");
   const [keyword, setKeyword] = useState("");
+  const [warningThreshold, setWarningThreshold] = useState("1000");
+
+  // Shared settings (Interval & Timeout)
+  const [interval, setInterval_] = useState("300");
+  const [timeout, setTimeout_] = useState("5000");
+
+  // Batch mode rows
+  const [batchRows, setBatchRows] = useState<BatchRow[]>([
+    {
+      id: "1",
+      name: "",
+      category: "Web Server",
+      checkType: "HTTPS",
+      target: "https://",
+      port: "443",
+    },
+    {
+      id: "2",
+      name: "",
+      category: "Application Server",
+      checkType: "PING",
+      target: "",
+      port: "",
+    },
+    {
+      id: "3",
+      name: "",
+      category: "Database Server (ERP)",
+      checkType: "TCP_PORT",
+      target: "",
+      port: "5432",
+    },
+  ]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleTypeChange = (type: CheckType) => {
+  const handleSingleTypeChange = (type: CheckType) => {
     setCheckType(type);
     if (type === "HTTP") {
       setPort("80");
@@ -482,32 +527,148 @@ function AddMonitorModal({ onClose, onCreated }: AddMonitorModalProps) {
     }
   };
 
+  const handleAddBatchRow = () => {
+    setBatchRows((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        name: "",
+        category: "Web Server",
+        checkType: "HTTPS",
+        target: "https://",
+        port: "443",
+      },
+    ]);
+  };
+
+  const handleAddMultipleBatchRows = (count: number) => {
+    const newRows: BatchRow[] = Array.from({ length: count }, () => ({
+      id: Math.random().toString(36).substring(2, 9),
+      name: "",
+      category: "Web Server",
+      checkType: "HTTPS",
+      target: "https://",
+      port: "443",
+    }));
+    setBatchRows((prev) => [...prev, ...newRows]);
+  };
+
+  const handleRemoveBatchRow = (id: string) => {
+    if (batchRows.length <= 1) return;
+    setBatchRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const handleDuplicateBatchRow = (id: string) => {
+    const row = batchRows.find((r) => r.id === id);
+    if (!row) return;
+    const copy: BatchRow = {
+      ...row,
+      id: Math.random().toString(36).substring(2, 9),
+      name: row.name ? `${row.name} (Copy)` : "",
+    };
+    const idx = batchRows.findIndex((r) => r.id === id);
+    const next = [...batchRows];
+    next.splice(idx + 1, 0, copy);
+    setBatchRows(next);
+  };
+
+  const handleUpdateBatchRow = (id: string, field: keyof BatchRow, value: any) => {
+    setBatchRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const updated = { ...r, [field]: value };
+        if (field === "checkType") {
+          if (value === "HTTP") {
+            updated.port = "80";
+            if (!updated.target.startsWith("http://") && !updated.target.startsWith("https://")) {
+              updated.target = updated.target ? `http://${updated.target.replace(/^https?:\/\//, "")}` : "http://";
+            }
+          } else if (value === "HTTPS") {
+            updated.port = "443";
+            if (!updated.target.startsWith("http://") && !updated.target.startsWith("https://")) {
+              updated.target = updated.target ? `https://${updated.target.replace(/^https?:\/\//, "")}` : "https://";
+            }
+          } else if (value === "PING") {
+            updated.port = "";
+            updated.target = updated.target.replace(/^https?:\/\//, "").split("/")[0];
+          } else if (value === "TCP_PORT") {
+            updated.port = updated.port || "5432";
+            updated.target = updated.target.replace(/^https?:\/\//, "").split("/")[0];
+          }
+        }
+        return updated;
+      })
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const res = await fetch("/api/uptime/monitors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          category,
-          checkType,
-          target: target.trim(),
-          port: checkType === "TCP_PORT" ? port : undefined,
-          intervalSeconds: interval,
-          timeoutMs: timeout,
-          warningThresholdMs: warningThreshold !== "0" ? warningThreshold : null,
-          expectedStatus:
-            checkType === "HTTP" || checkType === "HTTPS" ? expectedStatus : undefined,
-          keyword: keyword.trim() || undefined,
-        }),
-      });
+      if (mode === "single") {
+        // Single Monitor Submit
+        const res = await fetch("/api/uptime/monitors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            category,
+            checkType,
+            target: target.trim(),
+            port: checkType === "TCP_PORT" ? port : undefined,
+            intervalSeconds: interval,
+            timeoutMs: timeout,
+            warningThresholdMs: warningThreshold !== "0" ? warningThreshold : null,
+            expectedStatus:
+              checkType === "HTTP" || checkType === "HTTPS" ? expectedStatus : undefined,
+            keyword: keyword.trim() || undefined,
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal membuat monitor baru");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gagal membuat monitor baru");
+      } else {
+        // Batch Monitor Submit
+        // Validate batch rows
+        for (let i = 0; i < batchRows.length; i++) {
+          const row = batchRows[i];
+          if (!row.name.trim()) {
+            throw new Error(`Baris ${i + 1}: Nama layanan / server wajib diisi`);
+          }
+          if (!row.target.trim() || row.target.trim() === "https://" || row.target.trim() === "http://") {
+            throw new Error(`Baris ${i + 1} (${row.name || "Tanpa Nama"}): Alamat URL / Target Host wajib diisi lengkap`);
+          }
+          if (row.checkType === "TCP_PORT") {
+            const p = parseInt(row.port);
+            if (!p || p < 1 || p > 65535) {
+              throw new Error(`Baris ${i + 1} (${row.name}): Nomor port TCP harus antara 1-65535`);
+            }
+          }
+        }
+
+        const payload = {
+          monitors: batchRows.map((r) => ({
+            name: r.name.trim(),
+            category: r.category,
+            checkType: r.checkType,
+            target: r.target.trim(),
+            port: r.checkType === "TCP_PORT" ? parseInt(r.port) : undefined,
+            intervalSeconds: interval,
+            timeoutMs: timeout,
+          })),
+        };
+
+        const res = await fetch("/api/uptime/monitors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gagal mendaftarkan monitor batch");
+      }
 
       onCreated();
       onClose();
@@ -519,253 +680,532 @@ function AddMonitorModal({ onClose, onCreated }: AddMonitorModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-noc-surface border border-noc-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div
+        className={cn(
+          "w-full bg-noc-surface border border-noc-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] transition-all duration-300",
+          mode === "batch" ? "max-w-5xl" : "max-w-lg"
+        )}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-noc-border bg-noc-bg/60">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 border-b border-noc-border bg-noc-bg/70 gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Plus className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              {mode === "batch" ? <Layers className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
             </div>
             <div>
-              <h2 className="text-base font-bold text-noc-text-primary">Tambah Uptime Monitor Baru</h2>
-              <p className="text-xs text-noc-text-muted">Monitoring ketersediaan website, ping server, atau port service</p>
+              <h2 className="text-base font-bold text-noc-text-primary flex items-center gap-2">
+                <span>{mode === "batch" ? "Pendaftaran Multi-Monitor (Batch Add)" : "Tambah Uptime Monitor Baru"}</span>
+                {mode === "batch" && (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-brand-primary/20 text-brand-primary border border-brand-primary/30">
+                    {batchRows.length} Baris
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-noc-text-muted">
+                {mode === "batch"
+                  ? "Daftarkan banyak website, server, dan port layanan sekaligus secara dinamis"
+                  : "Monitoring ketersediaan website, ping server, atau port service"}
+              </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-noc-text-muted hover:text-noc-text-primary hover:bg-noc-hover transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {/* Mode Toggle Pills */}
+            <div className="flex items-center p-1 bg-noc-surface border border-noc-border rounded-xl">
+              <button
+                type="button"
+                onClick={() => setMode("batch")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                  mode === "batch"
+                    ? "bg-brand-primary text-white shadow-sm"
+                    : "text-noc-text-muted hover:text-noc-text-primary"
+                )}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Multi-Add (Batch)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("single")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                  mode === "single"
+                    ? "bg-brand-primary text-white shadow-sm"
+                    : "text-noc-text-muted hover:text-noc-text-primary"
+                )}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Satu Monitor</span>
+              </button>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-noc-text-muted hover:text-noc-text-primary hover:bg-noc-hover transition-colors ml-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 overflow-y-auto space-y-4 text-xs">
           {error && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-start gap-2">
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-start gap-2.5 animate-in fade-in duration-200">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>{error}</span>
+              <span className="font-medium leading-relaxed">{error}</span>
             </div>
           )}
 
-          {/* Tipe Protokol */}
-          <div>
-            <label className="block font-semibold text-noc-text-secondary mb-1.5">
-              Tipe Pengujian (Protokol) <span className="text-rose-400">*</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(["HTTPS", "HTTP", "PING", "TCP_PORT"] as const).map((type) => {
-                const Icon = getCheckTypeIcon(type);
-                const isSelected = checkType === type;
-                return (
+          {/* MODE: BATCH MULTI-ROW (DYNAMIC ROWS) */}
+          {mode === "batch" ? (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-brand-primary/5 border border-brand-primary/20">
+                <div className="flex items-center gap-2 text-noc-text-secondary text-xs">
+                  <Info className="w-4 h-4 text-brand-primary shrink-0" />
+                  <span>
+                    Sesuaikan <strong>Tipe Pengujian</strong>, <strong>Kategori Server</strong>, <strong>Nama Layanan</strong>, dan <strong>Alamat URL/IP</strong> untuk setiap baris di bawah:
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
                   <button
-                    key={type}
                     type="button"
-                    onClick={() => handleTypeChange(type)}
-                    className={cn(
-                      "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-semibold transition-all",
-                      isSelected
-                        ? "bg-brand-primary/15 border-brand-primary text-brand-primary shadow-sm"
-                        : "bg-noc-bg border-noc-border text-noc-text-muted hover:border-noc-border-focus hover:text-noc-text-primary"
-                    )}
+                    onClick={() => handleAddMultipleBatchRows(3)}
+                    className="px-2.5 py-1.5 rounded-lg bg-noc-bg border border-noc-border hover:border-noc-border-focus text-noc-text-secondary hover:text-noc-text-primary text-[11px] font-medium transition-all"
                   >
-                    <Icon className="w-4 h-4 mb-1" />
-                    <span>{type === "TCP_PORT" ? "Port TCP" : type}</span>
+                    +3 Baris
                   </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Kategori Server / Layanan */}
-          <div>
-            <label className="block font-semibold text-noc-text-secondary mb-1.5">
-              Kategori Server / Layanan <span className="text-rose-400">*</span>
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {MONITOR_CATEGORIES.map((cat) => {
-                const isSelected = category === cat;
-                return (
                   <button
-                    key={cat}
                     type="button"
-                    onClick={() => setCategory(cat)}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all text-center",
-                      isSelected
-                        ? "bg-brand-primary/15 border-brand-primary text-brand-primary shadow-sm"
-                        : "bg-noc-bg border-noc-border text-noc-text-muted hover:border-noc-border-focus hover:text-noc-text-primary"
-                    )}
+                    onClick={handleAddBatchRow}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-primary/15 hover:bg-brand-primary/25 border border-brand-primary/30 text-brand-primary text-xs font-semibold transition-all shadow-sm"
                   >
-                    <Server className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{cat}</span>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Baris</span>
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              </div>
 
-          {/* Nama Layanan */}
-          <div>
-            <label className="block font-semibold text-noc-text-secondary mb-1.5">
-              Nama Layanan / Server <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Contoh: Portal ERP BSS, Server Database SAP, Web Utama"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary transition-colors text-xs"
-            />
-          </div>
+              {/* Dynamic Rows Container */}
+              <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                {batchRows.map((row, idx) => (
+                  <div
+                    key={row.id}
+                    className="p-3.5 rounded-xl bg-noc-bg/90 border border-noc-border hover:border-noc-border-focus transition-all space-y-3 group"
+                  >
+                    <div className="flex items-center justify-between border-b border-noc-border/60 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-noc-surface border border-noc-border text-noc-text-muted flex items-center justify-center text-[10px] font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="font-semibold text-noc-text-primary text-xs">
+                          {row.name ? row.name : `Monitor #${idx + 1}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateBatchRow(row.id)}
+                          title="Duplikasi Baris Ini"
+                          className="p-1.5 rounded-lg text-noc-text-muted hover:text-noc-text-primary hover:bg-noc-surface border border-transparent hover:border-noc-border transition-colors text-[11px] flex items-center gap-1"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span className="hidden sm:inline">Salin</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={batchRows.length <= 1}
+                          onClick={() => handleRemoveBatchRow(row.id)}
+                          title="Hapus Baris Ini"
+                          className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
 
-          {/* Target URL atau IP */}
-          <div>
-            <label className="block font-semibold text-noc-text-secondary mb-1.5">
-              {checkType === "PING"
-                ? "Alamat IP Host / Domain"
-                : checkType === "TCP_PORT"
-                ? "Alamat IP Server / Hostname"
-                : "Alamat URL Lengkap"}{" "}
-              <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder={
-                checkType === "PING"
-                  ? "192.168.1.1 atau 8.8.8.8"
-                  : checkType === "TCP_PORT"
-                  ? "10.10.1.50 atau db.perusahaan.com"
-                  : "https://portal.binasaranasukses.com"
-              }
-              className="w-full px-3.5 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary transition-colors font-mono text-xs"
-            />
-          </div>
+                    {/* Inputs Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                      {/* 1. Nama Layanan */}
+                      <div className="sm:col-span-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-noc-text-muted mb-1">
+                          Nama Layanan <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={row.name}
+                          onChange={(e) => handleUpdateBatchRow(row.id, "name", e.target.value)}
+                          placeholder="Misal: Portal HRIS, DB SAP"
+                          className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary text-xs"
+                        />
+                      </div>
 
-          {/* Port jika TCP_PORT */}
-          {checkType === "TCP_PORT" && (
-            <div>
-              <label className="block font-semibold text-noc-text-secondary mb-1.5">
-                Nomor Port TCP <span className="text-rose-400">*</span>
-              </label>
-              <input
-                type="number"
-                required
-                min={1}
-                max={65535}
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                placeholder="Contoh: 3306 (MySQL), 5432 (Postgres), 22 (SSH)"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary transition-colors font-mono text-xs"
-              />
-            </div>
-          )}
+                      {/* 2. Kategori Server */}
+                      <div className="sm:col-span-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-noc-text-muted mb-1">
+                          Kategori Server <span className="text-rose-400">*</span>
+                        </label>
+                        <select
+                          value={row.category}
+                          onChange={(e) => handleUpdateBatchRow(row.id, "category", e.target.value as MonitorCategory)}
+                          className="w-full px-2.5 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
+                        >
+                          {MONITOR_CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-          {/* Interval & Timeout */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-semibold text-noc-text-secondary mb-1.5">
-                Frekuensi Pengujian
-              </label>
-              <select
-                value={interval}
-                onChange={(e) => setInterval_(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
-              >
-                {DEFAULT_INTERVALS.map((int) => (
-                  <option key={int.value} value={int.value}>
-                    {int.label}
-                  </option>
+                      {/* 3. Tipe Pengujian */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-noc-text-muted mb-1">
+                          Tipe Cek <span className="text-rose-400">*</span>
+                        </label>
+                        <select
+                          value={row.checkType}
+                          onChange={(e) => handleUpdateBatchRow(row.id, "checkType", e.target.value as CheckType)}
+                          className="w-full px-2 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs font-semibold"
+                        >
+                          <option value="HTTPS">HTTPS (Web)</option>
+                          <option value="HTTP">HTTP (Web)</option>
+                          <option value="PING">PING (ICMP)</option>
+                          <option value="TCP_PORT">TCP Port</option>
+                        </select>
+                      </div>
+
+                      {/* 4. Target URL / IP */}
+                      <div className={row.checkType === "TCP_PORT" ? "sm:col-span-3" : "sm:col-span-4"}>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-noc-text-muted mb-1">
+                          Alamat URL Lengkap / IP <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={row.target}
+                          onChange={(e) => handleUpdateBatchRow(row.id, "target", e.target.value)}
+                          placeholder={
+                            row.checkType === "PING"
+                              ? "192.168.101.1"
+                              : row.checkType === "TCP_PORT"
+                              ? "192.168.101.26"
+                              : "https://portal.bss.co.id"
+                          }
+                          className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary font-mono text-xs"
+                        />
+                      </div>
+
+                      {/* 5. Port jika TCP_PORT */}
+                      {row.checkType === "TCP_PORT" && (
+                        <div className="sm:col-span-1">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-noc-text-muted mb-1">
+                            Port <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min={1}
+                            max={65535}
+                            value={row.port}
+                            onChange={(e) => handleUpdateBatchRow(row.id, "port", e.target.value)}
+                            placeholder="5432"
+                            className="w-full px-2 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary font-mono text-xs text-center"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className="block font-semibold text-noc-text-secondary mb-1.5">
-                Batas Timeout (Down)
-              </label>
-              <select
-                value={timeout}
-                onChange={(e) => setTimeout_(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
-              >
-                <option value="3000">3 Detik</option>
-                <option value="5000">5 Detik (Standar)</option>
-                <option value="10000">10 Detik</option>
-                <option value="15000">15 Detik</option>
-              </select>
-            </div>
-          </div>
-          <p className="text-[11px] text-noc-text-muted flex items-center gap-1.5 pt-0.5">
-            <Shield className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-            Batas peringatan latency (Warning) dikelola terpusat oleh Admin di menu Settings.
-          </p>
+              </div>
 
-          {/* Pengaturan Tambahan Web (HTTP / HTTPS) */}
-          {(checkType === "HTTP" || checkType === "HTTPS") && (
-            <div className="p-3 rounded-xl bg-noc-bg border border-noc-border space-y-3">
-              <p className="text-[11px] font-semibold text-noc-text-muted uppercase tracking-wider">
-                Verifikasi Khusus Web (Opsional)
-              </p>
-              <div className="grid grid-cols-2 gap-3">
+              {/* Bottom Add Row Bar */}
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddBatchRow}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-noc-bg border border-dashed border-noc-border hover:border-brand-primary text-noc-text-secondary hover:text-brand-primary text-xs font-semibold transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Baris Monitor (+1)</span>
+                </button>
+                <span className="text-xs text-noc-text-muted">
+                  Total monitor yang akan dibuat: <strong className="text-noc-text-primary">{batchRows.length}</strong>
+                </span>
+              </div>
+
+              {/* Shared Batch Settings (Interval & Timeout) */}
+              <div className="p-3.5 rounded-xl bg-noc-bg border border-noc-border space-y-2">
+                <p className="text-[11px] font-bold text-noc-text-secondary uppercase tracking-wider">
+                  Pengaturan Frekuensi Pengecekan Bersama (Default untuk Batch)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-noc-text-muted mb-1">
+                      Interval Rutin Pemeriksaan
+                    </label>
+                    <select
+                      value={interval}
+                      onChange={(e) => setInterval_(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
+                    >
+                      {DEFAULT_INTERVALS.map((int) => (
+                        <option key={int.value} value={int.value}>
+                          {int.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-noc-text-muted mb-1">
+                      Batas Waktu Timeout (Down)
+                    </label>
+                    <select
+                      value={timeout}
+                      onChange={(e) => setTimeout_(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
+                    >
+                      <option value="3000">3 Detik</option>
+                      <option value="5000">5 Detik (Standar)</option>
+                      <option value="10000">10 Detik</option>
+                      <option value="15000">15 Detik</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* MODE: SINGLE MONITOR (FORM DETAIL LENGKAP) */
+            <div className="space-y-4">
+              {/* Tipe Protokol */}
+              <div>
+                <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                  Tipe Pengujian (Protokol) <span className="text-rose-400">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(["HTTPS", "HTTP", "PING", "TCP_PORT"] as const).map((type) => {
+                    const Icon = getCheckTypeIcon(type);
+                    const isSelected = checkType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => handleSingleTypeChange(type)}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-semibold transition-all",
+                          isSelected
+                            ? "bg-brand-primary/15 border-brand-primary text-brand-primary shadow-sm"
+                            : "bg-noc-bg border-noc-border text-noc-text-muted hover:border-noc-border-focus hover:text-noc-text-primary"
+                        )}
+                      >
+                        <Icon className="w-4 h-4 mb-1" />
+                        <span>{type === "TCP_PORT" ? "Port TCP" : type}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Kategori Server / Layanan */}
+              <div>
+                <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                  Kategori Server / Layanan <span className="text-rose-400">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {MONITOR_CATEGORIES.map((cat) => {
+                    const isSelected = category === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategory(cat)}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all text-center",
+                          isSelected
+                            ? "bg-brand-primary/15 border-brand-primary text-brand-primary shadow-sm"
+                            : "bg-noc-bg border-noc-border text-noc-text-muted hover:border-noc-border-focus hover:text-noc-text-primary"
+                        )}
+                      >
+                        <Server className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{cat}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nama Layanan */}
+              <div>
+                <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                  Nama Layanan / Server <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Contoh: Portal ERP BSS, Server Database SAP, Web Utama"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary transition-colors text-xs"
+                />
+              </div>
+
+              {/* Target URL atau IP */}
+              <div>
+                <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                  {checkType === "PING"
+                    ? "Alamat IP Host / Domain"
+                    : checkType === "TCP_PORT"
+                    ? "Alamat IP Server / Hostname"
+                    : "Alamat URL Lengkap"}{" "}
+                  <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder={
+                    checkType === "PING"
+                      ? "192.168.1.1 atau 8.8.8.8"
+                      : checkType === "TCP_PORT"
+                      ? "10.10.1.50 atau db.perusahaan.com"
+                      : "https://portal.binasaranasukses.com"
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary transition-colors font-mono text-xs"
+                />
+              </div>
+
+              {/* Port jika TCP_PORT */}
+              {checkType === "TCP_PORT" && (
                 <div>
-                  <label className="block text-[11px] font-medium text-noc-text-secondary mb-1">
-                    Ekspektasi Status Code
+                  <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                    Nomor Port TCP <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="number"
-                    value={expectedStatus}
-                    onChange={(e) => setExpectedStatus(e.target.value)}
-                    placeholder="200"
-                    className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary font-mono text-xs focus:outline-none focus:border-brand-primary"
+                    required
+                    min={1}
+                    max={65535}
+                    value={port}
+                    onChange={(e) => setPort(e.target.value)}
+                    placeholder="Contoh: 3306 (MySQL), 5432 (Postgres), 22 (SSH)"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary placeholder:text-noc-text-muted focus:outline-none focus:border-brand-primary transition-colors font-mono text-xs"
                   />
+                </div>
+              )}
+
+              {/* Interval & Timeout */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                    Frekuensi Pengujian
+                  </label>
+                  <select
+                    value={interval}
+                    onChange={(e) => setInterval_(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
+                  >
+                    {DEFAULT_INTERVALS.map((int) => (
+                      <option key={int.value} value={int.value}>
+                        {int.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-noc-text-secondary mb-1">
-                    Kata Kunci Wajib (Keyword)
+                  <label className="block font-semibold text-noc-text-secondary mb-1.5">
+                    Batas Timeout (Down)
                   </label>
-                  <input
-                    type="text"
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    placeholder="Contoh: Welcome, Login"
-                    className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary text-xs focus:outline-none focus:border-brand-primary"
-                  />
+                  <select
+                    value={timeout}
+                    onChange={(e) => setTimeout_(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-noc-bg border border-noc-border text-noc-text-primary focus:outline-none focus:border-brand-primary text-xs"
+                  >
+                    <option value="3000">3 Detik</option>
+                    <option value="5000">5 Detik (Standar)</option>
+                    <option value="10000">10 Detik</option>
+                    <option value="15000">15 Detik</option>
+                  </select>
                 </div>
               </div>
+
+              {/* Pengaturan Tambahan Web (HTTP / HTTPS) */}
+              {(checkType === "HTTP" || checkType === "HTTPS") && (
+                <div className="p-3 rounded-xl bg-noc-bg border border-noc-border space-y-3">
+                  <p className="text-[11px] font-semibold text-noc-text-muted uppercase tracking-wider">
+                    Verifikasi Khusus Web (Opsional)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-noc-text-secondary mb-1">
+                        Ekspektasi Status Code
+                      </label>
+                      <input
+                        type="number"
+                        value={expectedStatus}
+                        onChange={(e) => setExpectedStatus(e.target.value)}
+                        placeholder="200"
+                        className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary font-mono text-xs focus:outline-none focus:border-brand-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-noc-text-secondary mb-1">
+                        Kata Kunci Wajib (Keyword)
+                      </label>
+                      <input
+                        type="text"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        placeholder="Contoh: Welcome, Login"
+                        className="w-full px-3 py-2 rounded-lg bg-noc-surface border border-noc-border text-noc-text-primary text-xs focus:outline-none focus:border-brand-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Footer Submit */}
-          <div className="pt-2 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-noc-border text-noc-text-muted hover:text-noc-text-primary hover:bg-noc-hover transition-colors font-medium"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold hover:opacity-95 disabled:opacity-50 transition-all shadow-md shadow-emerald-500/20"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Menyimpan...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Mulai Memantau</span>
-                </>
-              )}
-            </button>
+          <div className="pt-3 border-t border-noc-border flex items-center justify-between gap-2.5">
+            <span className="text-[11px] text-noc-text-muted flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+              <span>SLA latency warning dikelola terpusat di Settings.</span>
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl border border-noc-border text-noc-text-muted hover:text-noc-text-primary hover:bg-noc-hover transition-colors font-medium text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold hover:opacity-95 disabled:opacity-50 transition-all shadow-md shadow-emerald-500/20 text-xs"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>
+                      {mode === "batch"
+                        ? `Simpan & Pantau (${batchRows.length} Monitor)`
+                        : "Mulai Memantau"}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

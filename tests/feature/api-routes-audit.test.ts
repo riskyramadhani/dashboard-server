@@ -26,24 +26,41 @@ class RateLimiterSimulation {
   }
 }
 
-// Simulasi validasi payload & error responses untuk API Route mutasi
-function handleCreateMonitorPayload(body: any): { status: number; error?: string; data?: any } {
-  const { name, checkType, target, port } = body;
+// Simulasi validasi payload & error responses untuk API Route mutasi (Single & Batch)
+function handleCreateMonitorPayload(body: any): { status: number; error?: string; data?: any; count?: number } {
+  const isBatch = Array.isArray(body) || (body?.monitors && Array.isArray(body?.monitors));
+  const items = isBatch ? (Array.isArray(body) ? body : body.monitors) : [body];
 
-  if (!name || !checkType || !target) {
-    return { status: 400, error: "name, checkType, and target are required" };
+  if (!items || items.length === 0) {
+    return { status: 400, error: "Daftar monitor tidak boleh kosong" };
   }
 
-  const validTypes = ["HTTP", "HTTPS", "PING", "TCP_PORT"];
-  if (!validTypes.includes(checkType)) {
-    return { status: 400, error: "Invalid checkType" };
+  const results: any[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const { name, checkType, target, port } = item;
+
+    if (!name || !checkType || !target) {
+      return { status: 400, error: `Baris ${i + 1}: name, checkType, and target are required` };
+    }
+
+    const validTypes = ["HTTP", "HTTPS", "PING", "TCP_PORT"];
+    if (!validTypes.includes(checkType)) {
+      return { status: 400, error: `Baris ${i + 1}: Invalid checkType` };
+    }
+
+    if (checkType === "TCP_PORT" && (!port || port < 1 || port > 65535)) {
+      return { status: 400, error: `Baris ${i + 1}: TCP_PORT check requires a valid port (1-65535)` };
+    }
+
+    results.push({ id: `mon-${i + 1}`, name, checkType, target, port });
   }
 
-  if (checkType === "TCP_PORT" && (!port || port < 1 || port > 65535)) {
-    return { status: 400, error: "TCP_PORT check requires a valid port (1-65535)" };
+  if (isBatch) {
+    return { status: 201, count: results.length, data: results };
   }
 
-  return { status: 201, data: { id: "mon-123", name, checkType, target, port } };
+  return { status: 201, data: results[0] };
 }
 
 describe("Feature & Integration Test: API Simulation, Error Handling & Rate Limiting", () => {
@@ -93,5 +110,21 @@ describe("Feature & Integration Test: API Simulation, Error Handling & Rate Limi
     expect(result.status).toBe(201);
     expect(result.data.name).toBe("BSS Main Portal");
     expect(result.data.id).toBeDefined();
+  });
+
+  it("POST /api/uptime/monitors harus mendukung pendaftaran Batch / Multi-Add (Success Batch Test)", () => {
+    const batchPayload = {
+      monitors: [
+        { name: "Portal 1", checkType: "HTTPS", target: "https://portal1.bss.co.id" },
+        { name: "Server PING", checkType: "PING", target: "192.168.101.1" },
+        { name: "DB ERP", checkType: "TCP_PORT", target: "192.168.101.26", port: 5432 },
+      ],
+    };
+
+    const result = handleCreateMonitorPayload(batchPayload);
+    expect(result.status).toBe(201);
+    expect(result.count).toBe(3);
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data[2].port).toBe(5432);
   });
 });
